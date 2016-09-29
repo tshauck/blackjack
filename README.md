@@ -6,6 +6,6 @@ development.
 
 Here is an example of the decision curve produced...
 
-[GitHub Logo](./Analysis/decision_curve.png)
+![Image](./Analysis/decision_curve.png)
 
 [1]: https://github.com/hellovai/blackjack
