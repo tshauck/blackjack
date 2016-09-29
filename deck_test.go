@@ -16,6 +16,7 @@ func TestCardValue(t *testing.T) {
 	}
 
 	for _, ct := range cardTests {
+		ct.hand.CountAces()
 		if ct.value != ct.hand.Value() {
 			t.Errorf("Hand value not equal, hand: %v, hand total: %d, value: %d.",
 				ct.hand, ct.hand.Value(), ct.value)

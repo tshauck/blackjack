@@ -70,19 +70,16 @@ func NewDeck(shuffle bool) Deck {
 
 type Hand struct {
 	Cards []Card
+	Aces  int // number of aces
 }
 
 func (h Hand) Value() int {
 	total := 0
-	aces := 0
 	for _, card := range h.Cards {
-		if card.Face == Ace {
-			aces = aces + 1
-			total += FaceValue[card.Face]
-		} else {
-			total += FaceValue[card.Face]
-		}
+		total += FaceValue[card.Face]
 	}
+
+	aces := h.Aces
 	for {
 		if aces == 0 || total <= 21 {
 			break
@@ -94,7 +91,20 @@ func (h Hand) Value() int {
 	return total
 }
 
+func (h *Hand) CountAces() {
+	aces := 0
+	for _, card := range h.Cards {
+		if card.Face == Ace {
+			aces++
+		}
+	}
+	h.Aces = aces
+}
+
 func (h *Hand) AddCard(c Card) {
+	if c.Face == Ace {
+		h.Aces++
+	}
 	h.Cards = append(h.Cards, c)
 }
 
@@ -170,11 +180,10 @@ func (g Game) Outcome() Reward {
 func (g Game) State() State {
 	playerTotal := g.Player.Value()
 	dealerFace := g.Dealer.Cards[0].Face
-	usableAce := false // TODO: Add usable ace.
 
 	return State{PlayerTotal: playerTotal,
 		DealerFace: dealerFace,
-		UsableAce:  usableAce}
+		Aces:       g.Player.Aces}
 }
 
 type Action int
@@ -189,7 +198,7 @@ var ActionNames = []string{"Stay", "Hit"}
 
 type State struct {
 	PlayerTotal int
-	UsableAce   bool
+	Aces        int
 	DealerFace  int
 }
 
@@ -204,12 +213,13 @@ func (a Agent) SavePolicy(fileName string) error {
 	for state, actions := range a.Q {
 		for action, q := range actions {
 			datum := map[string]interface{}{
-				"playerTotal": state.PlayerTotal,
-				"usableAce":   state.UsableAce,
-				"dealerFace":  FaceNames[state.DealerFace],
-				"action":      ActionNames[action],
-				"q":           q,
-				"visits":      a.Visit[state][action],
+				"playerTotal":    state.PlayerTotal,
+				"aces":           state.Aces,
+				"dealerFaceName": FaceNames[state.DealerFace],
+				"dealerFace":     state.DealerFace,
+				"action":         ActionNames[action],
+				"q":              q,
+				"visits":         a.Visit[state][action],
 			}
 			data = append(data, datum)
 		}
@@ -240,7 +250,7 @@ func NewAgent(l *log.Logger) Agent {
 	var v map[State]map[Action]int
 	v = make(map[State]map[Action]int)
 
-	for _, usableAce := range []bool{true, false} {
+	for _, nAces := range []int{0, 1, 2, 3, 4} {
 		for playerTotal := 12; playerTotal < 22; playerTotal++ {
 			for _, face := range Faces {
 
@@ -252,7 +262,7 @@ func NewAgent(l *log.Logger) Agent {
 					va[action] = 0
 				}
 
-				a := State{PlayerTotal: playerTotal, UsableAce: usableAce, DealerFace: face}
+				a := State{PlayerTotal: playerTotal, Aces: nAces, DealerFace: face}
 				q[a] = qa
 				v[a] = va
 			}
@@ -296,7 +306,7 @@ func (a *Agent) PlayGames(nGames int) {
 		}
 
 		outcome := game.Outcome()
-		a.L.WithFields(log.Fields{"nGame": nGame, "reward": outcome, "playerTotal": game.Player.Value(), "dealerValue": game.Dealer.Value()}).Info("Finished Game.")
+		a.L.WithFields(log.Fields{"aces": game.Player.Aces, "nGame": nGame, "reward": outcome, "playerTotal": game.Player.Value(), "dealerValue": game.Dealer.Value()}).Info("Finished Game.")
 		a.UpdatePolicy(gameEvents, game.Outcome())
 	}
 }
@@ -313,7 +323,7 @@ func (a *Agent) UpdatePolicy(gameEvents []GameEvent, reward Reward) {
 		a.L.WithFields(log.Fields{
 			"playerTotal": gameEvent.State.PlayerTotal,
 			"dealerFace":  gameEvent.State.DealerFace,
-			"usableAce":   gameEvent.State.UsableAce,
+			"aces":        gameEvent.State.Aces,
 			"action":      gameEvent.Action,
 			"visits":      a.Visit[gameEvent.State][gameEvent.Action],
 			"q":           a.Q[gameEvent.State][gameEvent.Action],
